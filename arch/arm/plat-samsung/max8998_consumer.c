@@ -43,7 +43,7 @@
 #define PMIC_BOTH	2
 
 #ifndef CONFIG_CPU_FREQ
-//unsigned int S5PC11X_FREQ_TAB = 1;
+unsigned int S5PC11X_FREQ_TAB = 1;
 #endif
 
 extern unsigned int HWREV;
@@ -91,12 +91,13 @@ static const unsigned int frequency_match_1GHZ[][4] = {
 
 static const unsigned int frequency_match_1DOT2GHZ[][4] = {
 /* frequency, Mathced VDD ARM voltage , Matched VDD INT*/
-        {1200000, 1300, 1150, 0},
-        {1000000, 1250, 1100, 1},
-        {800000, 1200, 1100, 2},
-        {400000, 1050, 1100, 3},
-        {200000, 950, 1100, 4},
-        {100000, 950, 1000, 5},
+	{1400000, 1450, 1150, 0},
+        {1200000, 1300, 1150, 1},
+        {1000000, 1250, 1100, 2},
+        {800000, 1200, 1100, 3},
+        {400000, 1050, 1100, 4},
+        {200000, 950, 1100, 5},
+        {100000, 950, 1000, 6},
 };
 const unsigned int (*frequency_match[2])[4] = {
         frequency_match_1GHZ,
@@ -123,12 +124,13 @@ static unsigned long set3_gpio;
 
 /*only 4 Arm voltages and 2 internal voltages possible*/
 static const unsigned int dvs_volt_table_1DOT2GHZ[][3] = {
-        {L0, DVSARM4, DVSINT2},// use 100mhz gpio con value        
+        {L0, DVSARM1, DVSINT1},// use 100mhz gpio con value        
         {L1, DVSARM1, DVSINT1},
-        {L2, DVSARM2, DVSINT1},
-        {L3, DVSARM3, DVSINT1},
-        {L4, DVSARM4, DVSINT1},
-        {L5, DVSARM4, DVSINT2},
+        {L2, DVSARM1, DVSINT1},
+        {L3, DVSARM2, DVSINT1},
+        {L4, DVSARM3, DVSINT1},
+        {L5, DVSARM4, DVSINT1},
+        {L6, DVSARM4, DVSINT2},
 
 };
 
@@ -151,12 +153,12 @@ const unsigned int (*dvs_volt_table[2])[3] = {
   * MIDAS[2010.09.20]@VARM Changed from 1.275V to 1.3V(Lockup issue)
 */
 static const unsigned int dvs_arm_voltage_set_1DOT2GHZ[][2] = {
-	{DVSARM1, 1325}, //  1275}, 
+	{DVSARM1, 1500}, //  1275}, 
 	{DVSARM2, 1225},
 	{DVSARM3, 1075},
-	{DVSARM4, 1350}, //{DVSARM4, 950},
-	{DVSINT1, 1100},
-	{DVSINT2, 1125}, //{DVSINT2, 1000},
+	{DVSARM4, 950}, //{DVSARM4, 950},
+	{DVSINT1, 1175},
+	{DVSINT2, 1000}, //{DVSINT2, 1000},
 };
 
 static const unsigned int dvs_arm_voltage_set_1GHZ[][2] = {
@@ -179,10 +181,10 @@ void dvs_set_for_1dot2Ghz (int onoff) {
 	//printk("KSOO dvs_set_for_1dot2Ghz %d\n", onoff);
 	if (onoff == saved_1dot2G_dvs_stat) return;
 	if (onoff) {
-		max8998_set_dvsarm_direct(DVSARM4, 1350);
-		max8998_set_dvsint_direct(DVSINT2, 1125);
+		max8998_set_dvsarm_direct(DVSARM4, 950);
+		max8998_set_dvsint_direct(DVSINT2, 1000);
 	} else {
-		max8998_set_dvsarm_direct(DVSARM4, 975);
+		max8998_set_dvsarm_direct(DVSARM4, 950);
 		max8998_set_dvsint_direct(DVSINT2, 1000);	
 	}
 	saved_1dot2G_dvs_stat = onoff;
@@ -192,6 +194,8 @@ void dvs_set_for_1dot2Ghz (int onoff) {
 	return;
 }
 
+extern int exp_UV_mV[7];
+
 static int set_max8998(unsigned int pwr, enum perf_level p_lv)
 {
 	int voltage;
@@ -199,17 +203,19 @@ static int set_max8998(unsigned int pwr, enum perf_level p_lv)
 	int ret = 0;
 	const unsigned int (*frequency_match_tab)[4] = frequency_match[S5PC11X_FREQ_TAB];	
 
-	DBG("%s : p_lv = %d : pwr = %d \n", __FUNCTION__, p_lv,pwr);
+//	DBG("%s : p_lv = %d : pwr = %d \n", __FUNCTION__, p_lv,pwr);
 
 	if(pwr == PMIC_ARM) {
-		voltage = frequency_match_tab[p_lv][pwr + 1];
+//		voltage = frequency_match_tab[p_lv][pwr + 1];
+		voltage = frequency_match_tab[p_lv][pwr + 1] - exp_UV_mV[p_lv];
 
 		if(voltage == s_arm_voltage)
 			return ret;
 
 		pmic_val = voltage * 1000;
 		
-		DBG("regulator_set_voltage =%d\n",voltage);
+//		DBG("regulator_set_voltage =%d\n",voltage);
+		DBG("regulator_set_voltage =%dmA @ %dMHz-%d UV=%d\n",voltage,frequency_match_tab[p_lv][pwr]/1000,p_lv,exp_UV_mV[p_lv]);
 		/*set Arm voltage*/
 		ret = regulator_set_voltage(Reg_Arm,pmic_val,pmic_val);
 	        if(ret != 0)
@@ -233,7 +239,7 @@ static int set_max8998(unsigned int pwr, enum perf_level p_lv)
 
 		pmic_val = voltage * 1000;
 
-		DBG("regulator_set_voltage = %d\n",voltage);
+		//DBG("regulator_set_voltage = %d\n",voltage);
 		/*set Arm voltage*/
 		ret = regulator_set_voltage(Reg_Int, pmic_val, pmic_val);
 	        if(ret != 0)
@@ -278,7 +284,7 @@ EXPORT_SYMBOL_GPL(set_pmic_gpio);
 
 int set_voltage(enum perf_level p_lv)
 {
-	DBG("%s : p_lv = %d\n", __FUNCTION__, p_lv);
+	//DBG("%s : p_lv = %d\n", __FUNCTION__, p_lv);
 	if(step_curr != p_lv) 
 	{
 		/*Commenting gpio initialisation*/
@@ -290,7 +296,6 @@ int set_voltage(enum perf_level p_lv)
 	}
 	return 0;
 }
-
 EXPORT_SYMBOL(set_voltage);
 
 int set_gpio_dvs(int armSet)
@@ -407,7 +412,7 @@ void max8998_init(void)
 	if(S5PC11X_FREQ_TAB) // for 1.2GHZ table
 	{
 		step_curr = L0;
-		set_voltage_dvs(L2); //switch to 800MHZ
+		set_voltage_dvs(L3); //switch to 800MHZ
 	}
 	else // for 1GHZ table
 	{
